@@ -99,11 +99,6 @@ class M3DDPG():
             reward_batch = reward_n_batch[i]
             not_done_batch = not_done_n_batch[i]
 
-
-            #adv_critic_e:critic_e_targetを悪くするような摂動を通常のtarget出力に加える．
-            #adv_actor_e:critic_eを悪くするような摂動を通常の出力に加える．
-            #critic_pの更新に使うtargetQの入力に用いられる次行動
-
             _next_actions = [self.agents[j].actor(next_state_n_batch) for j in range(len(self.agents))]
             _next_action_n_batch_critic = torch.cat([_next_action if j != i else _next_action.detach() for j, _next_action in enumerate(_next_actions)],axis=1).squeeze(0)
             _critic_target_loss = self.agents[i].critic_target(next_state_n_batch, _next_action_n_batch_critic).mean()
@@ -113,22 +108,15 @@ class M3DDPG():
                     [_next_action + eps * _next_action.grad if j != i else _next_action for j, _next_action in enumerate(_next_actions)]
                     , axis=1).squeeze(0)
 
-            #policy_pの更新に使うtargetQの入力に用いられる次行動
-
             _actions = [self.agents[j].actor(
                 state_n_batch[j]) for j in range(len(self.agents))]
-
-            #_action_n_batch_actor = [_action if j != i else _action.detach() for j, _action in enumerate(_actions)]
             _action_n_batch_actor = torch.cat([_action if j != i else _action.detach() for j, _action in enumerate(_actions)], axis=1)
-
             _actor_target_loss = self.agents[i].critic(
                 state_n_batch, _action_n_batch_actor).mean()
             _actor_target_loss.backward()
             action_n_batch_actor = torch.cat(
                     [_action + eps * _action.grad if j != i else _action for j, _action in enumerate(_actions)], axis=1)
 
-
-            #env update
             ##critic
             agent.optimizer_critic.zero_grad()
             currentQ = agent.critic(state_n_batch, action_n_batch)
@@ -138,14 +126,11 @@ class M3DDPG():
             critic_loss.backward()
             agent.optimizer_critic.step()
 
-            #print('b',agent.actor(state_n_batch[0]))
             ##policy
             agent.optimizer_actor.zero_grad()
             actor_loss = - agent.critic(state_n_batch, action_n_batch_actor).mean()
             actor_loss.backward()
             agent.optimizer_actor.step()
-            #print('a',agent.actor(state_n_batch[0]))
-
 
             soft_update(agent.critic_target, agent.critic, self.args.tau)
             soft_update(agent.actor_target, agent.actor, self.args.tau)
